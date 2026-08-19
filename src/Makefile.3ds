@@ -1,0 +1,83 @@
+# Nintendo 3DS build for Sonic Robo Blast 2 Final Demo v1.09.4a
+# Requires devkitPro/devkitARM, libctru, 3ds-zlib, libogg and Tremor/libvorbisidec.
+
+.SUFFIXES:
+
+ifeq ($(strip $(DEVKITARM)),)
+$(error "Please set DEVKITARM. Install the devkitPro 3DS toolchain first")
+endif
+
+TOPDIR ?= $(CURDIR)
+PORTLIBS ?= $(DEVKITPRO)/portlibs/3ds
+include $(DEVKITARM)/3ds_rules
+
+TARGET      := srb2_fd1094a_3ds
+BUILD       := build-3ds
+SOURCES     := . 3ds
+INCLUDES    := . 3ds
+APP_TITLE   := SRB2 Final Demo 1.09.4a
+APP_DESCRIPTION := Sonic Robo Blast 2 Final Demo v1.09.4a
+APP_AUTHOR  := Sonic Team Junior / SSNTails / 3DS port
+
+ARCH := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
+CFLAGS := -g -O2 -std=gnu99 -Wall \
+          -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers \
+          -Wno-implicit-function-declaration -Wno-incompatible-pointer-types \
+          -Wno-int-conversion -Wno-format -Wno-stringop-overflow \
+          -ffunction-sections -fdata-sections -fomit-frame-pointer -fcommon \
+          -fno-strict-aliasing -fwrapv -fsigned-char -mword-relocations $(ARCH)
+DEFINES := -D__3DS__ -DNONX86 -DNOASM -DNOHW -DNOHS -DNOIPX -DNO_IPV6 \
+           -DNOMIXER -DNOPNG -DNOPOSTPROCESSING -DHAVE_ZLIB -DUNIXCOMMON
+CFLAGS += $(INCLUDE) $(DEFINES)
+CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions
+
+# software renderer
+RENDER_OFILES := r_bsp.o r_data.o r_draw.o r_main.o r_plane.o r_segs.o \
+                 r_sky.o r_splats.o r_things.o screen.o v_video.o i_video.o
+ASFLAGS := -g $(ARCH)
+LDFLAGS := -specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map),--gc-sections
+LIBS := -lvorbisidec -logg -lz -lctru -lm
+LIBDIRS := $(CTRULIB) $(PORTLIBS)
+
+CORE_CFILES := \
+ comptime.c string.c d_main.c d_clisrv.c d_net.c d_netfil.c d_netcmd.c dehacked.c dstrings.c \
+ z_zone.c f_finale.c f_wipe.c g_game.c g_input.c am_map.c command.c console.c \
+ hu_stuff.c y_inter.c st_stuff.c m_argv.c m_bbox.c m_cheat.c m_fixed.c \
+ m_menu.c m_misc.c m_random.c info.c p_ceilng.c p_enemy.c p_fab.c p_floor.c \
+ p_inter.c p_lights.c p_map.c p_maputl.c p_mobj.c p_saveg.c p_setup.c \
+ p_sight.c p_spec.c p_telept.c p_tick.c p_user.c tables.c r_bsp.c r_data.c \
+ r_draw.c r_main.c r_plane.c r_segs.c r_sky.c r_splats.c r_things.c screen.c \
+ v_video.c s_sound.c sounds.c md5.c w_wad.c filesrch.c mserv.c i_tcp.c
+PLATFORM_CFILES := i_main.c i_net.c i_system.c i_sound.c i_video.c dosstr.c
+CFILES := $(CORE_CFILES) $(PLATFORM_CFILES)
+
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+export OUTPUT := $(CURDIR)/$(TARGET)
+export TOPDIR := $(CURDIR)
+export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
+export DEPSDIR := $(CURDIR)/$(BUILD)
+export OFILES_SOURCES := $(CFILES:.c=.o)
+export OFILES := $(OFILES_SOURCES)
+export HFILES :=
+export INCLUDE := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
+                  $(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+                  -I$(CURDIR)/$(BUILD)
+export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+export LD := $(CC)
+export _3DSXDEPS := $(if $(NO_SMDH),,$(OUTPUT).smdh)
+
+.PHONY: all clean
+all:
+	@mkdir -p $(BUILD)
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile.3ds
+
+clean:
+	@rm -rf $(BUILD) $(TARGET).3dsx $(TARGET).elf $(TARGET).smdh $(TARGET).map
+
+else
+$(OUTPUT).3dsx: $(OUTPUT).elf $(_3DSXDEPS)
+$(OFILES_SOURCES): $(HFILES)
+$(RENDER_OFILES): CFLAGS += -O3
+$(OUTPUT).elf: $(OFILES)
+-include $(DEPSDIR)/*.d
+endif
