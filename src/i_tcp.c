@@ -477,13 +477,6 @@ static void SOCK_Send(void)
 	if (!nodeconnected[doomcom->remotenode])
 		return;
 
-<<<<<<< HEAD
-	c = sendto(mysocket, (char *)&doomcom->data, doomcom->datalength, 0,
-		(struct sockaddr *)&clientaddress[doomcom->remotenode],
-#ifdef __3DS__
-		sizeof (struct sockaddr_in));
-#else
-=======
 #ifdef __3DS__
 	{
 		int tries = 0;
@@ -501,7 +494,6 @@ static void SOCK_Send(void)
 #else
 	c = sendto(mysocket, (char *)&doomcom->data, doomcom->datalength, 0,
 		(struct sockaddr *)&clientaddress[doomcom->remotenode],
->>>>>>> ca0809a (Fix 3DS networking)
 		sizeof (struct sockaddr));
 #endif
 
@@ -628,13 +620,10 @@ static SOCKET_TYPE UDP_Socket(void)
 		else
 			CONS_Printf("Network system buffer set to: %dKb\n",i>>10);
 	}
-<<<<<<< HEAD
-=======
 #ifdef __3DS__
 	i = 64<<10;
 	setsockopt(s, SOL_SOCKET, SO_SNDBUF, (char *)&i, sizeof (i));
 #endif
->>>>>>> ca0809a (Fix 3DS networking)
 
 	// ip + udp
 	packetheaderlength = 20 + 8; // for stats
