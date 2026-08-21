@@ -2017,9 +2017,25 @@ static void CL_SendClientCmd(void)
 
 	netbuffer->packettype = PT_CLIENTCMD;
 
+<<<<<<< HEAD
 	if (cl_packetmissed)
 		netbuffer->packettype++;
 	netbuffer->u.clientpak.resendfrom = (unsigned char)neededtic;
+=======
+#ifdef __3DS__
+	if (cl_mode == cl_connected && neededtic > 0)
+	{
+		netbuffer->packettype++;
+		netbuffer->u.clientpak.resendfrom = (unsigned char)(neededtic - 1);
+	}
+	else
+#endif
+	{
+		if (cl_packetmissed)
+			netbuffer->packettype++;
+		netbuffer->u.clientpak.resendfrom = (unsigned char)neededtic;
+	}
+>>>>>>> ca0809a (Fix 3DS networking)
 	netbuffer->u.clientpak.client_tic = (unsigned char)gametic;
 
 	if (gamestate == GS_WAITINGPLAYERS)
@@ -2177,7 +2193,15 @@ static void SV_SendTics(void)
 
 			HSendPacket(n, false, 0, packsize);
 			// when tic are too large, only one tic is sent so don't go backward!
+<<<<<<< HEAD
 			if (lasttictosend-doomcom->extratics > realfirsttic)
+=======
+#ifdef __3DS__
+			if (lasttictosend-doomcom->extratics >= realfirsttic)
+#else
+			if (lasttictosend-doomcom->extratics > realfirsttic)
+#endif
+>>>>>>> ca0809a (Fix 3DS networking)
 				supposedtics[n] = lasttictosend-doomcom->extratics;
 			else
 				supposedtics[n] = lasttictosend;
@@ -2364,6 +2388,18 @@ FILESTAMP
 			for (i = 0; i < MAXNETNODES; i++)
 				if (nodeingame[i] && nettics[i] < firstticstosend)
 					firstticstosend = nettics[i];
+<<<<<<< HEAD
+=======
+#ifdef __3DS__
+			if (doomcom->extratics > 0)
+			{
+				if (firstticstosend > doomcom->extratics)
+					firstticstosend -= doomcom->extratics;
+				else
+					firstticstosend = 0;
+			}
+#endif
+>>>>>>> ca0809a (Fix 3DS networking)
 
 			// Don't erase tics not acknowledged
 			counts = realtics;
