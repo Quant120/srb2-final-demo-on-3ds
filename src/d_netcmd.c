@@ -588,6 +588,7 @@ void D_RegisterClientCommands(void)
 
 	CV_RegisterVar(&cv_realnames);
 	CV_RegisterVar(&cv_netstat);
+	CV_RegisterVar(&cv_netticbuffer);
 
 #ifdef FISHCAKE
 	CV_RegisterVar(&cv_fishcake);

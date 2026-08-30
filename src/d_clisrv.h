@@ -234,7 +234,7 @@ extern signed char servernode;
 void    Command_Ping_f(void);
 extern  tic_t  connectiontimeout;
 
-extern consvar_t cv_disallownewplayer, cv_allownewplayer, cv_maxplayers, cv_maxsend;
+extern consvar_t cv_disallownewplayer, cv_allownewplayer, cv_maxplayers, cv_maxsend, cv_netticbuffer;
 
 // used in d_net, the only dependence
 tic_t ExpandTics(int low);

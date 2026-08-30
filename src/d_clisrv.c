@@ -1210,9 +1210,11 @@ static void Got_KickCmd(char **p, int playernum)
 		CL_RemovePlayer(pnum);
 }
 
+static CV_PossibleValue_t netticbuffer_cons_t[] = {{0, "MIN"}, {3, "MAX"}, {0, NULL}};
 static CV_PossibleValue_t maxplayers_cons_t[] = {{1, "MIN"}, {32, "MAX"}, {0, NULL}};
 static CV_PossibleValue_t maxsend_cons_t[] = {{0, "MIN"}, {51200, "MAX"}, {0, NULL}};
 
+consvar_t cv_netticbuffer = {"netticbuffer", "1", CV_SAVE, netticbuffer_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
 consvar_t cv_allownewplayer = {"allowjoin", "On", 0, CV_OnOff, NULL, 0, NULL, NULL, 0, 0, NULL	};
 consvar_t cv_disallownewplayer = {"disallowjoin", "Off", 0, CV_OnOff, NULL, 0, NULL, NULL, 0, 0, NULL}; /// \todo not done
 consvar_t cv_maxplayers = {"maxplayers", "8", CV_SAVE, maxplayers_cons_t, NULL, 0, NULL, NULL, 0, 0, NULL};
@@ -2017,19 +2019,9 @@ static void CL_SendClientCmd(void)
 
 	netbuffer->packettype = PT_CLIENTCMD;
 
-#ifdef __3DS__
-	if (cl_mode == cl_connected && neededtic > 0)
-	{
+	if (cl_packetmissed)
 		netbuffer->packettype++;
-		netbuffer->u.clientpak.resendfrom = (unsigned char)(neededtic - 1);
-	}
-	else
-#endif
-	{
-		if (cl_packetmissed)
-			netbuffer->packettype++;
-		netbuffer->u.clientpak.resendfrom = (unsigned char)neededtic;
-	}
+	netbuffer->u.clientpak.resendfrom = (unsigned char)neededtic;
 	netbuffer->u.clientpak.client_tic = (unsigned char)gametic;
 
 	if (gamestate == GS_WAITINGPLAYERS)
@@ -2187,11 +2179,7 @@ static void SV_SendTics(void)
 
 			HSendPacket(n, false, 0, packsize);
 			// when tic are too large, only one tic is sent so don't go backward!
-#ifdef __3DS__
-			if (lasttictosend-doomcom->extratics >= realfirsttic)
-#else
 			if (lasttictosend-doomcom->extratics > realfirsttic)
-#endif
 				supposedtics[n] = lasttictosend-doomcom->extratics;
 			else
 				supposedtics[n] = lasttictosend;
@@ -2323,6 +2311,11 @@ void TryRunTics(tic_t realtics)
 					neededtic++;
 				else
 					consistancy[gametic%BACKUPTICS] = Consistancy();
+
+				// Leave a certain amount of tics present in the net buffer as long as we've ran at least one tic this frame.
+				if (!server && gamestate == GS_LEVEL && leveltime > 3
+					&& neededtic <= gametic + cv_netticbuffer.value)
+					break;
 			}
 	}
 }
@@ -2339,6 +2332,11 @@ void NetUpdate(void)
 
 	if (realtics <= 0) // nothing new to update
 		return;
+#ifdef __3DS__
+	if (server && netgame && realtics > 1)
+		realtics = 1;
+	else
+#endif
 	if (realtics > 5)
 	{
 		if (server)
@@ -2378,16 +2376,6 @@ FILESTAMP
 			for (i = 0; i < MAXNETNODES; i++)
 				if (nodeingame[i] && nettics[i] < firstticstosend)
 					firstticstosend = nettics[i];
-#ifdef __3DS__
-			if (doomcom->extratics > 0)
-			{
-				if (firstticstosend > doomcom->extratics)
-					firstticstosend -= doomcom->extratics;
-				else
-					firstticstosend = 0;
-			}
-#endif
-
 			// Don't erase tics not acknowledged
 			counts = realtics;
 

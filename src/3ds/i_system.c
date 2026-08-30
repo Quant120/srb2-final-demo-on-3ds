@@ -202,6 +202,7 @@ int I_StartupSystem(void)
 		return 0;
 
 	logstream = open("srb2log.txt", O_WRONLY|O_CREAT|O_TRUNC, 0666);
+	osSetSpeedupEnable(true);
 	gfxInitDefault();
 	gfxSet3D(false);
 	gfxSetScreenFormat(GFX_TOP, GSP_RGB565_OES);
