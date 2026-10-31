@@ -1875,9 +1875,8 @@ void P_LoadThingsOnly(void)
   *       clobbered during a net savegame. After this hack is removed, the
   *       wadname parameter will no longer be necessary.
   */
-// Last Stand: preload the map's existing GPU graphics while its loading
-// screen is displayed. The 3DS driver enforces a hard GPU-memory budget.
-// Does not touch simulation, drawing order, draw distance or BSP traversal.
+// Preload level graphics while the loading screen is displayed.
+// The GPU memory budget limits how many textures can stay resident.
 #if defined(__3DS__) && defined(HWRENDER)
 static void P_3DSPreloadLevelGraphics(void)
 {
@@ -1885,7 +1884,6 @@ static void P_3DSPreloadLevelGraphics(void)
     int j, i, k, lump;
     thinker_t *th;
     spriteframe_t *sf;
-    int texcount = 0, flatcount = 0, sprcount = 0;
 
     // Draw a static loading screen before touching GPU texture allocations.
     // Avoid additional frame submissions while the preload is running.
@@ -1924,7 +1922,6 @@ static void P_3DSPreloadLevelGraphics(void)
                         if (k && lump == sf->lumppat[k-1]) continue;
                         patch = (GlidePatch_t *)W_CachePatchNum(lump, PU_CACHE);
                         if (patch) HWR_GetMappedPatch(patch, colormaps);
-                        ++sprcount;
                     }
                 }
             }
@@ -1945,7 +1942,6 @@ static void P_3DSPreloadLevelGraphics(void)
                 if (k && lump == def->spriteframes[j].lumppat[k-1]) continue;
                 patch = (GlidePatch_t *)W_CachePatchNum(lump, PU_CACHE);
                 if (patch) HWR_GetMappedPatch(patch, colormaps);
-                ++sprcount;
             }
     }
 
@@ -1966,7 +1962,8 @@ static void P_3DSPreloadLevelGraphics(void)
             if (skytexture >= 0 && skytexture < numtextures)
                 usedtex[skytexture] = 1;
             for (j = 0; j < numtextures; ++j)
-                if (usedtex[j]) { HWR_GetTexture(j); ++texcount; }
+                if (usedtex[j])
+                    HWR_GetTexture(j);
             free(usedtex);
         }
     }
@@ -1977,12 +1974,9 @@ static void P_3DSPreloadLevelGraphics(void)
         if (i == skyflatnum) continue;
         if (levelflats[i].lumpnum < 0) continue;
         HWR_GetFlat(levelflats[i].lumpnum);
-        ++flatcount;
     }
 
     HWR3DS_PreloadEnd();
-    CONS_Printf("HWR: graphics preload pass done (%d walls, %d flats, %d sprite frames)\n",
-        texcount, flatcount, sprcount);
 }
 #endif
 

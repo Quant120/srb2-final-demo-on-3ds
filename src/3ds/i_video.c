@@ -302,7 +302,7 @@ void I_StartupGraphics(void)
 			rendermode = render_opengl; 
 		else
 		{
-			CONS_Printf("GPU said nope, software it is\n");
+			CONS_Printf("HWR initialization failed; using software renderer\n");
 			rendermode = render_soft;
 		}
 	}

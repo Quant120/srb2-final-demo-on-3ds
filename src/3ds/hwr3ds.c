@@ -410,7 +410,6 @@ static boolean H3D_Init(I_Error_t ErrorFunction)
 		I_OutputMsg("HWR: cannot allocate %u byte GPU cmd buffer\n", (unsigned)HWR_CMDBUF_BYTES);
 		return false;
 	}
-	I_OutputMsg("HWR: GPU command buffer %u bytes (4MB), crash shield enabled\n", (unsigned)HWR_CMDBUF_BYTES);
 	target = C3D_RenderTargetCreate(LCD_H, LCD_W, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
 	if (!target)
 		goto fail;
@@ -439,7 +438,7 @@ static boolean H3D_Init(I_Error_t ErrorFunction)
     
     h3d_max4_scratch = malloc(MAX_HWR_VERTS * sizeof(*verts));
     if (!h3d_max4_scratch)
-        I_OutputMsg("MAX4: sort scratch unavailable, using original draw order\n");
+        I_OutputMsg("HWR: texture sort buffer unavailable; using original draw order\n");
 #endif
     H3D_Max4ResetQueue();
 	{
@@ -969,7 +968,7 @@ static void H3D_FlushSortQueue(void)
         
         if (dst != h3d_max4_first+h3d_max4_total)
         {
-            I_OutputMsg("MAX4: geometry accounting mismatch; dropping sort window\n");
+            I_OutputMsg("HWR: texture sort geometry mismatch; skipping sorted batch\n");
             H3D_Max4ResetQueue();
             return;
         }
