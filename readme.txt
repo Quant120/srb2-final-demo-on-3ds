@@ -13,7 +13,7 @@ Install devkitPro with devkitARM, libctru, 3ds-zlib, libogg and Tremor/libvorbis
 ## Install
 
 Put the 3DSX beside the Final Demo data files, or use `sdmc:/3ds/srb2_fd109/`.
-The 3DS build uses `config3ds.cfg`. Optional command line arguments may be put in `3ds_args.txt`.
+The 3DS build uses `config3ds.cfg`. A renderer picker appears on the bottom screen before the game boots. Use UP/DOWN and A to choose Software or experimental Citro3D HWR; B starts Software. Nothing to edit on the SD card.
 
 ## Networking
 

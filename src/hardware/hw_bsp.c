@@ -998,10 +998,22 @@ void HWR_CreatePlanePolygons(int bspnum)
 	rootpv++;
 
 	WalkBSPNode(bspnum, rootp, NULL,rootbbox);
-
+#ifdef __3DS__
+	((void)0);
+	((void)0);
+#endif
 	i = SolveTProblem();
+#ifdef __3DS__
+	((void)0);
+#endif
 	//CONS_Printf("%d point div a polygone line\n",i);
+#ifdef __3DS__
+	((void)0);
+#endif
 	AdjustSegs();
+#ifdef __3DS__
+	((void)0);
+#endif
 
 	//debug debug..
 	//if (nobackpoly)

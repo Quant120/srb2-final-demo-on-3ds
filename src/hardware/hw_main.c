@@ -35,6 +35,9 @@
 #include "../r_splats.h"
 #include "../g_game.h"
 #include "../st_stuff.h"
+#ifdef __3DS__
+#include "../i_system.h"
+#endif
 
 #define R_FAKEFLOORS
 
@@ -98,7 +101,13 @@ consvar_t cv_granisotropicmode = {"gr_anisotropicmode", "1", CV_CALL, granisotro
                              CV_anisotropic_ONChange, 0, NULL, NULL, 0, 0, NULL};
 //static consvar_t cv_grzbuffer = {"gr_zbuffer", "On", 0, CV_OnOff};
 consvar_t cv_grcorrecttricks = {"gr_correcttricks", "On", 0, CV_OnOff, NULL, 0, NULL, NULL, 0, 0, NULL};
+#ifdef __3DS__
+// 29/10/2026: test without the ancient T-join splitter. the 3DS wants to live.
+// TODO 31/10/2026: turn it on again when we've got a useful crash address.
+consvar_t cv_grsolvetjoin = {"gr_solvetjoin", "Off", 0, CV_OnOff, NULL, 0, NULL, NULL, 0, 0, NULL};
+#else
 consvar_t cv_grsolvetjoin = {"gr_solvetjoin", "On", 0, CV_OnOff, NULL, 0, NULL, NULL, 0, 0, NULL};
+#endif
 
 // console variables in development
 consvar_t cv_grmd2 = {"gr_md2", "Off", 0, CV_OnOff, NULL, 0, NULL, NULL, 0, 0, NULL};
@@ -2523,6 +2532,10 @@ static gr_vissprite_t *HWR_NewVisSprite(void)
 //                  : (monsters, bonuses, weapons, lights, ...)
 // Returns          :
 // -----------------+
+#ifdef __3DS__
+static int fd_sprite_trace; // second draw call was the last thing alive. suspicious.
+#endif
+
 static void HWR_DrawSprite(gr_vissprite_t *spr)
 {
 	byte i;
@@ -2554,6 +2567,9 @@ static void HWR_DrawSprite(gr_vissprite_t *spr)
 	else
 		gpatch = W_CachePatchNum(spr->patchlumpnum, PU_CACHE);    
 
+#ifdef __3DS__
+	if (fd_sprite_trace) ((void)0);
+#endif
 	if (!(spr->mobj->flags2 & MF2_DEBRIS))
 		HWR_DL_AddLight(spr, gpatch);
 
@@ -2611,7 +2627,13 @@ static void HWR_DrawSprite(gr_vissprite_t *spr)
 	// cache the patch in the graphics card memory
 	//12/12/99: Hurdler: same comment as above (for md2)
 	//Hurdler: 25/04/2000: now support colormap in hardware mode
+#ifdef __3DS__
+	if (fd_sprite_trace) ((void)0);
+#endif
 	HWR_GetMappedPatch(gpatch, spr->colormap);
+#ifdef __3DS__
+	if (fd_sprite_trace) ((void)0);
+#endif
 
 	// sprite lighting by modulating the RGB components
 	/// \todo coloured
@@ -2668,13 +2690,27 @@ static void HWR_DrawSprite(gr_vissprite_t *spr)
 			blend = PF_Translucent|PF_Occlude;
 		}
 
+#ifdef __3DS__
+		if (fd_sprite_trace) ((void)0);
+#endif
 		HWD.pfnDrawPolygon(&Surf, wallVerts, 4, blend|PF_Modulated|PF_Clip);
+#ifdef __3DS__
+		if (fd_sprite_trace) ((void)0);
+#endif
 	}
 
 	// draw a corona if this sprite contain light(s)
 #ifndef NEWCORONAS
 	if (!(spr->mobj->flags2 & MF2_DEBRIS))
-		HWR_DoCoronasLighting(wallVerts, spr);
+		{
+#ifdef __3DS__
+			if (fd_sprite_trace) ((void)0);
+#endif
+			HWR_DoCoronasLighting(wallVerts, spr);
+#ifdef __3DS__
+			if (fd_sprite_trace) ((void)0);
+#endif
+		}
 #endif
 }
 
@@ -2690,7 +2726,10 @@ static void HWR_DrawPrecipitationSprite(gr_vissprite_t *spr)
 	FSurfaceInfo Surf;
 
 	// cache sprite graphics
-	gpatch = W_CachePatchNum(spr->patchlumpnum, PU_CACHE);    
+	gpatch = W_CachePatchNum(spr->patchlumpnum, PU_CACHE);
+#ifdef __3DS__
+	if (fd_sprite_trace) ((void)0);
+#endif    
 
 	// create the sprite billboard
 	//
@@ -2733,14 +2772,26 @@ static void HWR_DrawPrecipitationSprite(gr_vissprite_t *spr)
 	// cache the patch in the graphics card memory
 	//12/12/99: Hurdler: same comment as above (for md2)
 	//Hurdler: 25/04/2000: now support colormap in hardware mode
+#ifdef __3DS__
+	if (fd_sprite_trace) ((void)0);
+#endif
 	HWR_GetMappedPatch(gpatch, spr->colormap);
+#ifdef __3DS__
+	if (fd_sprite_trace) ((void)0);
+#endif
 
 	// sprite lighting by modulating the RGB components
 	Surf.FlatColor.s.red = Surf.FlatColor.s.green = Surf.FlatColor.s.blue = spr->sectorlight;
 
 	blend = HWR_TranstableToAlpha((spr->mobj->frame & FF_TRANSMASK)>>FF_TRANSSHIFT, &Surf);
 
+#ifdef __3DS__
+	if (fd_sprite_trace) ((void)0);
+#endif
 	HWD.pfnDrawPolygon(&Surf, wallVerts, 4, blend|PF_Modulated|PF_Clip|PF_Occlude);
+#ifdef __3DS__
+	if (fd_sprite_trace) ((void)0);
+#endif
 }
 
 // --------------------------------------------------------------------------
@@ -2802,6 +2853,12 @@ static void HWR_SortVisSprites(void)
 // --------------------------------------------------------------------------
 static void HWR_DrawSprites(void)
 {
+#ifdef __3DS__
+	static int fd_drawcalls;
+	int fd_n = 0;
+	fd_sprite_trace = 0; ++fd_drawcalls; // 29/10: stop logging 168 sprites per pass
+	if (fd_sprite_trace) ((void)0);
+#endif
 	if (gr_vissprite_p > gr_vissprites)
 	{
 		gr_vissprite_t *spr;
@@ -2811,12 +2868,23 @@ static void HWR_DrawSprites(void)
 		 spr != &gr_vsprsortedhead;
 		  spr = spr->next)
 		{
+#ifdef __3DS__
+			if (fd_sprite_trace) ((void)0);
+#endif
 			if (spr->precip == true)
 				HWR_DrawPrecipitationSprite(spr);
 			else
 				HWR_DrawSprite(spr);
+#ifdef __3DS__
+			if (fd_sprite_trace) ((void)0);
+			fd_n++;
+#endif
 		}
 	}
+#ifdef __3DS__
+	if (fd_sprite_trace) ((void)0);
+	fd_sprite_trace = 0;
+#endif
 }
 
 // --------------------------------------------------------------------------
@@ -3335,6 +3403,12 @@ static size_t numwalls = 0;
 // ==========================================================================
 void HWR_RenderPlayerView(int viewnumber, player_t *player)
 {
+#ifdef __3DS__
+	static int fd_debug_views;
+	int fd_dbg = 0; // old trace disabled; it cost frames // 3 frames of screaming. then silence.
+	if (fd_dbg) ((void)0);
+	fd_debug_views++;
+#endif
 	{
 		// do we really need to save player (is it not the same)?
 		player_t *saved_player = stplyr;
@@ -3427,7 +3501,13 @@ void HWR_RenderPlayerView(int viewnumber, player_t *player)
 	HWD.pfnSetTransform(&atransform);
 
 	validcount++;
+#ifdef __3DS__
+	if (fd_dbg) ((void)0);
+#endif
 	HWR_RenderBSPNode(numnodes-1);
+#ifdef __3DS__
+	if (fd_dbg) ((void)0);
+#endif
 
 #ifndef NOCRAPPYMLOOK
 	if (cv_grcrappymlook.value && (aimingangle || cv_grfov.value+grfovadjust > 90*FRACUNIT))
@@ -3461,11 +3541,23 @@ void HWR_RenderPlayerView(int viewnumber, player_t *player)
 	HWR_ResetLights();
 
 	// Draw MD2 and sprites
+#ifdef __3DS__
+	if (fd_dbg) ((void)0);
+#endif
 	HWR_SortVisSprites();
 	HWR_DrawMD2S();
+#ifdef __3DS__
+	if (fd_dbg) ((void)0);
+#endif
 	// Draw the sprites like it was done previously without T&L
 	HWD.pfnSetTransform(NULL);
+#ifdef __3DS__
+	if (fd_dbg) ((void)0);
+#endif
 	HWR_DrawSprites();
+#ifdef __3DS__
+	if (fd_dbg) ((void)0);
+#endif
 
 #ifdef NEWCORONAS
 	//Hurdler: they must be drawn before translucent planes, what about gl fog?

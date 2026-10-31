@@ -66,37 +66,6 @@ static void useconfig(int *argc, char ***argv)
 	*argv = newargv;
 }
 
-static void useargsfile(int *argc, char ***argv)
-{
-	char **newargv;
-	int i;
-
-	if (access("3ds_args.txt", R_OK) != 0)
-		return;
-
-	for (i = 1; i < *argc; i++)
-		if (!strcasecmp((*argv)[i], "@3ds_args.txt"))
-			return;
-
-	newargv = calloc((size_t)*argc + 2, sizeof (*newargv));
-	if (!newargv)
-		return;
-
-	newargv[0] = (*argv)[0];
-	newargv[1] = strdup("@3ds_args.txt");
-	if (!newargv[1])
-	{
-		free(newargv);
-		return;
-	}
-
-	if (*argc > 1)
-		memcpy(&newargv[2], &(*argv)[1], (size_t)(*argc-1) * sizeof (*newargv));
-
-	(*argc)++;
-	*argv = newargv;
-}
-
 static boolean hasdata(void)
 {
 	return access("srb2.srb", R_OK) == 0 || access("srb2.wad", R_OK) == 0;
@@ -153,17 +122,68 @@ static void setworkdir(int argc, char **argv)
 		chdir(cwd);
 }
 
+// 29/10/2026: boot picker. do NOT move this into the SRB2 menu.
+// Game boot has not happened yet. the GPU gets ONE chance to embarrass itself.
+int hwr3ds_wanted = 0;
+
+static int pick_renderer_before_the_game_steals_everything(void)
+{
+    int choice = 0; // software by default, because sometimes hardware is a potato
+    u32 pressed;
+    int dirty = 1;
+
+    while (aptMainLoop())
+    {
+        if (dirty)
+        {
+            consoleClear();
+            printf("SRB2 FINAL DEMO - 3DS\n");
+            printf("=====================\n\n");
+            printf("Pick renderer BEFORE boot:\n\n");
+            printf("%s Software 320x200\n", choice == 0 ? ">" : " ");
+            printf("%s Citro3D HWR 320x200 (WIP)\n", choice == 1 ? ">" : " ");
+            printf("\nUP / DOWN : choose\n");
+            printf("A : boot selected renderer\n");
+            printf("B : boot software (panic button)\n\n");
+            printf("HWR is experimental!\n");
+            printf("your 3DS may invent new problems\n");
+            fflush(stdout);
+            gfxFlushBuffers();
+            dirty = 0;
+        }
+        gspWaitForVBlank();
+        hidScanInput();
+        pressed = hidKeysDown();
+        if (pressed & (KEY_DUP | KEY_DDOWN | KEY_DLEFT | KEY_DRIGHT))
+        {
+            choice = !choice;
+            dirty = 1;
+        }
+        if (pressed & KEY_B)
+            return 0;
+        if (pressed & KEY_A)
+            return choice;
+    }
+    return -1; // home button killed us before the game booted. fair.
+}
+
 int main(int argc, char **argv)
 {
 	setworkdir(argc, argv);
 	setenv("HOME", ".", 1);
 	useconfig(&argc, &argv);
-	useargsfile(&argc, &argv);
 
 	myargc = argc;
 	myargv = argv;
 
 	I_StartupSystem();
+	hwr3ds_wanted = pick_renderer_before_the_game_steals_everything();
+	if (hwr3ds_wanted < 0)
+	{
+		I_ShutdownSystem();
+		return 0;
+	}
+	consoleClear();
 	CONS_Printf("Setting up SRB2...\n");
 	D_SRB2Main();
 	CONS_Printf("Entering main game loop...\n");

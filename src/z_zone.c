@@ -94,7 +94,11 @@ void Z_Init(void)
 	{
 		mb_used = (byte)atoi(M_GetNextParm());
 #ifdef __3DS__
-		mb_used = (byte)min(max(mb_used, 8), 26);
+		#ifdef FD_CIA_80MB
+        mb_used = (byte)min(max(mb_used, 8), 30);
+#else
+        mb_used = (byte)min(max(mb_used, 8), 26);
+#endif
 #endif
 	}
 	else
@@ -115,7 +119,11 @@ void Z_Init(void)
 			mb_used = (byte)min(max(memfree, mb_used), 48); // min 32MB max 48MB, for all the static sfxs
 #elif defined (__3DS__)
 		if (memfree > 8)
-			mb_used = (byte)min(max(memfree - 8, 16), 24);
+			#ifdef FD_CIA_80MB
+            mb_used = (byte)min(max(memfree - 10, 20), 30);
+#else
+            mb_used = (byte)min(max(memfree - 8, 16), 24);
+#endif
 		else
 			mb_used = 16;
 #endif

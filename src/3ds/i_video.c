@@ -35,6 +35,12 @@
 #include "../keys.h"
 #include "../screen.h"
 #include "../v_video.h"
+#include "../console.h"
+#ifdef HWRENDER
+#include "../hardware/hw_drv.h"
+#include "../hardware/hw_main.h"
+#include "hwr3ds.h"
+#endif
 
 void I_UpdateMusic(void);
 
@@ -111,24 +117,30 @@ void I_GetEvent(void)
 	handlebutton(down, up, KEY_DLEFT, KEY_LEFTARROW);
 	handlebutton(down, up, KEY_DRIGHT, KEY_RIGHTARROW);
 
-	handlebutton(down, up, KEY_A, '/');
-	handlebutton(down, up, KEY_A, KEY_ENTER);
+	
+	if (gamestate != GS_LEVEL || menuactive)
+		handlebutton(down, up, KEY_A, KEY_ENTER);
+	else
+		handlebutton(down, up, KEY_A, '/');
 
 	if (menuactive)
 		handlebutton(down, up, KEY_B, KEY_ESCAPE);
 	else
 		handlebutton(down, up, KEY_B, '.');
 
-	handlebutton(down, up, KEY_X, KEY_CTRL);     /* fire */
-	handlebutton(down, up, KEY_Y, '\'');         /* light dash */
-	handlebutton(down, up, KEY_L, '[');          /* strafe right */
-	handlebutton(down, up, KEY_R, ']');          /* strafe left */
+	handlebutton(down, up, KEY_X, KEY_CTRL);      
+	handlebutton(down, up, KEY_Y, '\'');          
+	handlebutton(down, up, KEY_L, '[');           
+	handlebutton(down, up, KEY_R, ']');           
 	handlebutton(down, up, KEY_START, KEY_ESCAPE);
 	handlebutton(down, up, KEY_SELECT, KEY_CONSOLE);
 	handlebutton(down, up, KEY_ZL, KEY_PGDN);
 	handlebutton(down, up, KEY_ZR, KEY_PGUP);
 
-	handlebutton(down, up, KEY_A, KEY_JOY1 + 0);
+	
+	
+	if (gamestate == GS_LEVEL && !menuactive)
+		handlebutton(down, up, KEY_A, KEY_JOY1 + 0);
 	handlebutton(down, up, KEY_B, KEY_JOY1 + 1);
 	handlebutton(down, up, KEY_X, KEY_JOY1 + 2);
 	handlebutton(down, up, KEY_Y, KEY_JOY1 + 3);
@@ -144,7 +156,12 @@ void I_GetEvent(void)
 	D_PostEvent(&joy);
 }
 
-void I_UpdateNoBlit(void) {}
+void I_UpdateNoBlit(void)
+{
+#ifdef HWRENDER
+	if (rendermode == render_opengl) HWR3DS_BeginFrame();
+#endif
+}
 
 static void presentframe(boolean waitvbl)
 {
@@ -155,6 +172,14 @@ static void presentframe(boolean waitvbl)
 
 	I_3DSPollLifecycle();
 	I_UpdateMusic();
+
+#ifdef HWRENDER
+	if (rendermode == render_opengl)
+	{
+		HWR3DS_EndFrame(waitvbl);
+		return;
+	}
+#endif
 
 	if (!graphics_started || !screens[0])
 		return;
@@ -196,7 +221,7 @@ static void presentframe(boolean waitvbl)
 		}
 	}
 
-	// top screen framebuffer
+	
 	GSPGPU_FlushDataCache(fb, TOP_W * TOP_H * sizeof (*fb));
 	gfxScreenSwapBuffers(GFX_TOP, false);
 	if (waitvbl)
@@ -225,7 +250,7 @@ void I_SetPalette(RGBA_t *palette)
 }
 
 int VID_NumModes(void) { return 1; }
-const char *VID_GetModeName(int modenum) { return modenum == 0 ? "320x200" : NULL; }
+const char *VID_GetModeName(int modenum) { return modenum == 0 ? (rendermode == render_opengl ? "320x200 Citro3D HWR" : "320x200") : NULL; }
 int VID_GetModeForSize(int w, int h) { (void)w; (void)h; return 0; }
 void VID_PrepareModeList(void) {}
 
@@ -235,10 +260,10 @@ int VID_SetMode(int modenum)
 	(void)modenum;
 
 	vid.modenum = 0;
-	vid.width = BASEVIDWIDTH;
+	vid.width = BASEVIDWIDTH; 
 	vid.height = BASEVIDHEIGHT;
 	vid.bpp = 1;
-	vid.rowbytes = BASEVIDWIDTH;
+	vid.rowbytes = vid.width;
 	vid.recalc = true;
 	vid.direct = NULL;
 	vid.u.numpages = 1;
@@ -269,14 +294,37 @@ void I_StartupGraphics(void)
 	CV_RegisterVar(&cv_vidwait);
 	CV_RegisterVar(&cv_stretch);
 	keyboard_started = true;
+#ifdef HWRENDER
+	if (hwr3ds_wanted) 
+	{
+		HWR3DS_InstallDriver();
+		if (HWD.pfnInit(I_Error))
+			rendermode = render_opengl; 
+		else
+		{
+			CONS_Printf("GPU said nope, software it is\n");
+			rendermode = render_soft;
+		}
+	}
+#endif
 	VID_SetMode(0);
 	graphics_started = true;
+#ifdef HWRENDER
+	if (rendermode == render_opengl) HWR_Startup();
+#endif
 }
 
 void I_ShutdownGraphics(void)
 {
 	if (!graphics_started)
 		return;
+#ifdef HWRENDER
+	if (rendermode == render_opengl)
+	{
+		HWR_Shutdown();
+		HWR3DS_Close();
+	}
+#endif
 	free(vid.buffer);
 	vid.buffer = NULL;
 	graphics_started = false;

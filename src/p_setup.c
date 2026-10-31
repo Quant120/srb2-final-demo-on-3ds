@@ -60,6 +60,10 @@
 #ifdef HWRENDER
 #include "hardware/hw_main.h"
 #include "hardware/hw_light.h"
+#if defined(__3DS__)
+#include "hardware/hw_glob.h"
+#include "3ds/hwr3ds.h"
+#endif
 #endif
 
 //
@@ -1871,6 +1875,117 @@ void P_LoadThingsOnly(void)
   *       clobbered during a net savegame. After this hack is removed, the
   *       wadname parameter will no longer be necessary.
   */
+// Last Stand: preload the map's existing GPU graphics while its loading
+// screen is displayed. The 3DS driver enforces a hard GPU-memory budget.
+// Does not touch simulation, drawing order, draw distance or BSP traversal.
+#if defined(__3DS__) && defined(HWRENDER)
+static void P_3DSPreloadLevelGraphics(void)
+{
+    unsigned char *usedtex = NULL, *usedspr = NULL;
+    int j, i, k, lump;
+    thinker_t *th;
+    spriteframe_t *sf;
+    int texcount = 0, flatcount = 0, sprcount = 0;
+
+    // Draw a static loading screen before touching GPU texture allocations.
+    // Avoid additional frame submissions while the preload is running.
+    CONS_Printf("HWR: preloading level graphics...\n");
+    CON_Drawer();
+    I_FinishUpdate();
+    if (!HWR3DS_PreloadBegin()) return;
+
+    // Player and existing level sprites first, then flats and walls.
+    // Existing level thinkers tell us which sprite families are needed.
+    // Avoid uploading every sprite in every WAD: that can exhaust RAM.
+    if (numsprites > 0)
+    {
+        usedspr = (unsigned char *)calloc((size_t)numsprites, 1);
+        if (usedspr)
+        {
+            for (th = thinkercap.next; th != &thinkercap; th = th->next)
+                if (th->function.acp1 == (actionf_p1)P_MobjThinker)
+                {
+                    mobj_t *mo = (mobj_t *)th;
+                    if ((unsigned)mo->sprite < numsprites)
+                        usedspr[mo->sprite] = 1;
+                }
+            if (SPR_PLAY < numsprites) usedspr[SPR_PLAY] = 1;
+            for (i = 0; i < (int)numsprites; ++i)
+            {
+                if (!usedspr[i] || !sprites[i].spriteframes) continue;
+                for (j = 0; j < sprites[i].numframes; ++j)
+                {
+                    sf = &sprites[i].spriteframes[j];
+                    for (k = 0; k < 8; ++k)
+                    {
+                        GlidePatch_t *patch;
+                        lump = sf->lumppat[k];
+                        if (lump < 0) continue;
+                        if (k && lump == sf->lumppat[k-1]) continue;
+                        patch = (GlidePatch_t *)W_CachePatchNum(lump, PU_CACHE);
+                        if (patch) HWR_GetMappedPatch(patch, colormaps);
+                        ++sprcount;
+                    }
+                }
+            }
+            free(usedspr);
+        }
+    }
+
+    // Player sprites are skin-specific, separate from the global PLAY sprite.
+    if (playeringame[consoleplayer] && players[consoleplayer].skin < numskins)
+    {
+        const spritedef_t *def = &skins[players[consoleplayer].skin].spritedef;
+        for (j = 0; j < def->numframes; ++j)
+            for (k = 0; k < 8; ++k)
+            {
+                GlidePatch_t *patch;
+                lump = def->spriteframes[j].lumppat[k];
+                if (lump < 0) continue;
+                if (k && lump == def->spriteframes[j].lumppat[k-1]) continue;
+                patch = (GlidePatch_t *)W_CachePatchNum(lump, PU_CACHE);
+                if (patch) HWR_GetMappedPatch(patch, colormaps);
+                ++sprcount;
+            }
+    }
+
+    if (numtextures > 0)
+    {
+        usedtex = (unsigned char *)calloc((size_t)numtextures, 1);
+        if (usedtex)
+        {
+            for (j = 0; j < numsides; ++j)
+            {
+                if (sides[j].toptexture >= 0 && sides[j].toptexture < numtextures)
+                    usedtex[sides[j].toptexture] = 1;
+                if (sides[j].midtexture >= 0 && sides[j].midtexture < numtextures)
+                    usedtex[sides[j].midtexture] = 1;
+                if (sides[j].bottomtexture >= 0 && sides[j].bottomtexture < numtextures)
+                    usedtex[sides[j].bottomtexture] = 1;
+            }
+            if (skytexture >= 0 && skytexture < numtextures)
+                usedtex[skytexture] = 1;
+            for (j = 0; j < numtextures; ++j)
+                if (usedtex[j]) { HWR_GetTexture(j); ++texcount; }
+            free(usedtex);
+        }
+    }
+
+    // Flats are tracked separately from wall textures in old HWR.
+    for (i = 0; i < numlevelflats; ++i)
+    {
+        if (i == skyflatnum) continue;
+        if (levelflats[i].lumpnum < 0) continue;
+        HWR_GetFlat(levelflats[i].lumpnum);
+        ++flatcount;
+    }
+
+    HWR3DS_PreloadEnd();
+    CONS_Printf("HWR: graphics preload pass done (%d walls, %d flats, %d sprite frames)\n",
+        texcount, flatcount, sprcount);
+}
+#endif
+
 boolean P_SetupLevel(int map, skill_t skill, const char *wadname) // for wad files
 {
 	int i, loadprecip = 1;
@@ -2105,6 +2220,9 @@ noscript:
 		// Correct missing sidedefs & deep water trick
 		HWR_CorrectSWTricks();
 		HWR_CreatePlanePolygons(numnodes - 1);
+#ifdef __3DS__
+		((void)0);
+#endif
 
 	}
 #endif
@@ -2114,16 +2232,31 @@ noscript:
 	for (i = 0; i < MAXPLAYERS; i++)
 		playerstarts[i] = NULL;
 
+#ifdef __3DS__
+	((void)0);
+#endif
 	P_LoadThings(lastloadedmaplumpnum + ML_THINGS);
-
+#ifdef __3DS__
+	((void)0);
+	((void)0);
+#endif
 	P_SpawnSecretItems(loademblems);
+#ifdef __3DS__
+	((void)0);
+#endif
 
 	for (numcoopstarts = 0; numcoopstarts < MAXPLAYERS; numcoopstarts++)
 		if (!playerstarts[numcoopstarts])
 			break;
 
 	// set up world state
+#ifdef __3DS__
+	((void)0);
+#endif
 	P_SpawnSpecials();
+#ifdef __3DS__
+	((void)0);
+#endif
 
 	if (loadprecip) //  ugly hack for P_NetUnArchiveMisc (and P_LoadNetGame)
 		P_SpawnPrecipitation();
@@ -2159,6 +2292,9 @@ noscript:
 		}
 
 
+#ifdef __3DS__
+	((void)0);
+#endif
 	if (!dedicated)
 	{
 		camera.x = players[displayplayer].mo ? players[displayplayer].mo->x : 0;
@@ -2249,11 +2385,25 @@ noscript:
 #ifdef HWRENDER // not win32 only 19990829 by Kin
 	if (rendermode != render_soft && rendermode != render_none)
 	{
+#ifdef __3DS__
+		((void)0);
+#endif
 		HWR_PrepLevelCache(numtextures);
+#ifdef __3DS__
+		((void)0);
+		((void)0);
+#endif
 		HWR_CreateStaticLightmaps(numnodes - 1);
+#ifdef __3DS__
+		((void)0);
+#endif
 	}
 #endif
 
+#if defined(__3DS__) && defined(HWRENDER)
+    if (!dedicated && rendermode != render_soft && rendermode != render_none)
+        P_3DSPreloadLevelGraphics();
+#endif
 	if (precache || dedicated)
 		R_PrecacheLevel();
 
@@ -2266,7 +2416,13 @@ noscript:
 
 	levelloading = false;
 
+#ifdef __3DS__
+	((void)0);
+#endif
 	P_RunCachedActions();
+#ifdef __3DS__
+	((void)0);
+#endif
 
 	return true;
 }

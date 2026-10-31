@@ -549,10 +549,32 @@ void HWR_InitTextureCache(void)
 	gr_textures = NULL;
 }
 
+// 29/10/2026: Driver cache reset must also reset the *engine* downloaded flags.
+// Else after MAP reload HWR_GetFlat() sees downloaded=1 + data=NULL and
+// sets NULL texture -> the world becomes solid white. spectacularly cursed.
+static void HWR_Forget3DSDownloads(void)
+{
+#ifdef __3DS__
+    int i,j;
+    if(gr_textures) for(i=0;i<gr_numtextures;i++)
+        gr_textures[i].mipmap.downloaded=0;
+    for(j=0;j<numwadfiles;j++) {
+        if(!wadfiles[j] || !wadfiles[j]->hwrcache) continue;
+        for(i=0;i<wadfiles[j]->numlumps;i++) {
+            GlideMipmap_t *m=&wadfiles[j]->hwrcache[i].mipmap;
+            m->downloaded=0;
+            for(m=m->nextcolormap;m;m=m->nextcolormap)
+                m->downloaded=0;
+        }
+    }
+#endif
+}
+
 void HWR_FreeTextureCache(void)
 {
 	int i,j;
-	// free references to the textures
+	// Reset flags while all owners are still valid, BEFORE freeing GPU textures.
+	HWR_Forget3DSDownloads();
 	HWD.pfnClearMipMapCache();
 
 	// free all hardware-converted graphics cached in the heap
@@ -606,7 +628,18 @@ void HWR_SetPalette(RGBA_t *palette)
 	gamma_correction.s.red   = (byte)cv_grgammared.value;
 	gamma_correction.s.green = (byte)cv_grgammagreen.value;
 	gamma_correction.s.blue  = (byte)cv_grgammablue.value;
-	HWD.pfnSetPalette(palette, &gamma_correction); 
+#ifdef __3DS__
+    {
+        static RGBA_t lastpalette[256];
+        static int havepalette;
+        if(!havepalette || memcmp(lastpalette,palette,sizeof lastpalette)!=0) {
+            HWR_Forget3DSDownloads();
+            memcpy(lastpalette,palette,sizeof lastpalette);
+            havepalette=1;
+        }
+    }
+#endif
+    HWD.pfnSetPalette(palette, &gamma_correction); 
 
 	// hardware driver will flush there own cache if cache is non paletized
 	// now flush data texture cache so 32 bit texture are recomputed

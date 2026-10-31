@@ -13,8 +13,8 @@ include $(DEVKITARM)/3ds_rules
 
 TARGET      := srb2_fd1094a_3ds
 BUILD       := build-3ds
-SOURCES     := . 3ds
-INCLUDES    := . 3ds
+SOURCES     := . 3ds hardware
+INCLUDES    := . 3ds hardware
 APP_TITLE   := SRB2 Final Demo 1.09.4a
 APP_DESCRIPTION := Sonic Robo Blast 2 Final Demo v1.09.4a
 APP_AUTHOR  := Sonic Team Junior / SSNTails / 3DS port
@@ -26,8 +26,11 @@ CFLAGS := -g -O2 -std=gnu99 -Wall \
           -Wno-int-conversion -Wno-format -Wno-stringop-overflow \
           -ffunction-sections -fdata-sections -fomit-frame-pointer -fcommon \
           -fno-strict-aliasing -fwrapv -fsigned-char -mword-relocations $(ARCH)
-DEFINES := -D__3DS__ -DNONX86 -DNOASM -DNOHW -DNOHS -DNOIPX -DNO_IPV6 \
+DEFINES := -D__3DS__ -DNONX86 -DNOASM -DHWRENDER -DNOHS -DNOIPX -DNO_IPV6 \
            -DNOMIXER -DNOPNG -DNOPOSTPROCESSING -DHAVE_ZLIB -DUNIXCOMMON
+ifeq ($(FD_CIA_MODE),1)
+DEFINES += -DFD_CIA_80MB
+endif
 CFLAGS += $(INCLUDE) $(DEFINES)
 CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions
 
@@ -36,7 +39,7 @@ RENDER_OFILES := r_bsp.o r_data.o r_draw.o r_main.o r_plane.o r_segs.o \
                  r_sky.o r_splats.o r_things.o screen.o v_video.o i_video.o
 ASFLAGS := -g $(ARCH)
 LDFLAGS := -specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map),--gc-sections
-LIBS := -lvorbisidec -logg -lz -lctru -lm
+LIBS := -lSDL_mixer -lmikmod -lmad -lvorbisidec -logg -lSDL -lcitro3d -lctru -lz -lm
 LIBDIRS := $(CTRULIB) $(PORTLIBS)
 
 CORE_CFILES := \
@@ -48,8 +51,10 @@ CORE_CFILES := \
  p_sight.c p_spec.c p_telept.c p_tick.c p_user.c tables.c r_bsp.c r_data.c \
  r_draw.c r_main.c r_plane.c r_segs.c r_sky.c r_splats.c r_things.c screen.c \
  v_video.c s_sound.c sounds.c md5.c w_wad.c filesrch.c mserv.c i_tcp.c
-PLATFORM_CFILES := i_main.c i_net.c i_system.c i_sound.c i_video.c dosstr.c
-CFILES := $(CORE_CFILES) $(PLATFORM_CFILES)
+PLATFORM_CFILES := i_main.c i_net.c i_system.c i_sound_2130.c i_video.c dosstr.c
+# old HWR source + local PICA driver. it is somehow 2026 and we are doing this
+HWR_CFILES := hw_bsp.c hw_cache.c hw_draw.c hw_light.c hw_main.c hw_md2.c hw_trick.c hwr3ds.c
+CFILES := $(CORE_CFILES) $(PLATFORM_CFILES) $(HWR_CFILES)
 
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 export OUTPUT := $(CURDIR)/$(TARGET)
@@ -57,10 +62,11 @@ export TOPDIR := $(CURDIR)
 export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
 export DEPSDIR := $(CURDIR)/$(BUILD)
 export OFILES_SOURCES := $(CFILES:.c=.o)
-export OFILES := $(OFILES_SOURCES)
-export HFILES :=
+export OFILES := $(OFILES_SOURCES) hwr3ds.shbin.o
+export HFILES := hwr3ds_shbin.h
 export INCLUDE := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
                   $(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+                  -I$(PORTLIBS)/include/SDL \
                   -I$(CURDIR)/$(BUILD)
 export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 export LD := $(CC)
@@ -78,6 +84,13 @@ else
 $(OUTPUT).3dsx: $(OUTPUT).elf $(_3DSXDEPS)
 $(OFILES_SOURCES): $(HFILES)
 $(RENDER_OFILES): CFLAGS += -O3
+# FD_HWR_MAX_LASTSTAND_20261031: renderer-only -O3
+hwr3ds.o: CFLAGS += -O3
 $(OUTPUT).elf: $(OFILES)
+# PICA shader assembly; OpenGL does not live here
+.PRECIOUS: %.shbin
+%.shbin.o %_shbin.h: %.shbin
+	$(SILENTMSG) $(notdir $<)
+	$(bin2o)
 -include $(DEPSDIR)/*.d
 endif

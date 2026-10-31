@@ -31,7 +31,7 @@
 #include "../v_video.h"
 #include "../st_stuff.h"
 
-#ifndef UNIXLIKE // unix does not need this 19991024 by Kin
+#if !defined(UNIXLIKE) && !defined(__3DS__) // no io.h or sys/unistd.h on 3DS lol
 #ifdef __GNUC__
 #include <sys/unistd.h>
 #endif
